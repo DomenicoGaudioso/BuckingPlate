@@ -231,34 +231,100 @@ def solve_buckling_problem_fem(inp, fem_nx=40, fem_ny=20, n_modes=6):
         from scipy.sparse.linalg import eigsh
         from scipy.sparse import eye as speye
     except Exception as e:
-        return {'ok':False,'message':f'scikit-fem o dipendenze non disponibili: {e}'}
-    a_mm=_mm(inp.a,inp.unit); b_mm=_mm(inp.b,inp.unit); sx_fun,sy_fun,tau_fun=analytical_stress_functions(inp)
+        return {'ok': False, 'message': f'scikit-fem o dipendenze non disponibili: {e}'}
+
+    a_mm = _mm(inp.a, inp.unit)
+    b_mm = _mm(inp.b, inp.unit)
+    sx_fun, sy_fun, tau_fun = analytical_stress_functions(inp)
+
+    # mesh conforme ai bordi delle bande irrigidenti
     xs, ys = _build_aligned_axes(inp, fem_nx, fem_ny)
-    mesh=MeshTri.init_tensor(xs, ys); basis=Basis(mesh, ElementTriP2())
-    tris=mesh.t.T; pts=mesh.p.T; centers=pts[tris].mean(axis=1); xc=centers[:,0]; yc=centers[:,1]
-    Dcoef,memcoef,tags=_build_stiffener_field(inp, xc, yc)
-    sx_e=np.array([sx_fun(x,y) for x,y in zip(xc,yc)]); sy_e=np.array([sy_fun(x,y) for x,y in zip(xc,yc)]); tau_e=np.array([tau_fun(x,y) for x,y in zip(xc,yc)])
-    connectivity_checks=_check_closed_stiffener_connectivity(inp, mesh)
+    mesh = MeshTri.init_tensor(xs, ys)
+    basis = Basis(mesh, ElementTriP2())
+
+    D_field, mem_field = _build_stiffener_property_functions(inp)
+    connectivity_checks = _check_closed_stiffener_connectivity(inp, mesh)
+
     @BilinearForm
-    def k_form(u,v,w):
-        return (w.Dcoef / np.maximum(np.mean(w.memcoef),1e-9)) * dot(grad(u),grad(v))
+    def k_form(u, v, w):
+        xq = w.x[0]
+        yq = w.x[1]
+        Dq = D_field(xq, yq)
+        mq = mem_field(xq, yq)
+        return (Dq / np.maximum(mq, 1e-9)) * dot(grad(u), grad(v))
+
     @BilinearForm
-    def kg_form(u,v,w):
-        gu=grad(u); gv=grad(v); return w.sx*gu[0]*gv[0] + w.sy*gu[1]*gv[1] + w.tau*(gu[0]*gv[1]+gu[1]*gv[0])
-    K=asm(k_form,basis,Dcoef=Dcoef,memcoef=memcoef); KG=asm(kg_form,basis,sx=sx_e,sy=sy_e,tau=tau_e)
-    x0=basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0],0.0))).all(); x1=basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0],a_mm))).all(); y0=basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1],0.0))).all(); y1=basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1],b_mm))).all()
-    D=np.unique(np.concatenate([x0,x1,y0,y1])); Kc,_=condense(K,D=D); KGc,_=condense(KG,D=D); Kc=Kc+1e-9*speye(Kc.shape[0])
+    def kg_form(u, v, w):
+        xq = w.x[0]
+        yq = w.x[1]
+        sxq = sx_fun(xq, yq)
+        syq = sy_fun(xq, yq)
+        tauq = tau_fun(xq, yq)
+        gu = grad(u)
+        gv = grad(v)
+        return sxq * gu[0] * gv[0] + syq * gu[1] * gv[1] + tauq * (gu[0] * gv[1] + gu[1] * gv[0])
+
+    K = asm(k_form, basis)
+    KG = asm(kg_form, basis)
+
+    x0 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0], 0.0))).all()
+    x1 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0], a_mm))).all()
+    y0 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1], 0.0))).all()
+    y1 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1], b_mm))).all()
+    D = np.unique(np.concatenate([x0, x1, y0, y1]))
+
+    Kc, _ = condense(K, D=D)
+    KGc, _ = condense(KG, D=D)
+    Kc = Kc + 1e-9 * speye(Kc.shape[0])
+
     try:
-        ksolve=max(2,min(n_modes, max(KGc.shape[0]-2,2))); vals,vecs=eigsh(KGc,k=ksolve,M=Kc,sigma=0.0,which='LM'); finite=np.isfinite(vals)&(np.abs(vals)>1e-12); vals=vals[finite]; vecs=vecs[:,finite]; lam=1.0/vals; pos=np.sort(lam[np.isfinite(lam)&(lam>1e-8)])
+        ksolve = max(2, min(n_modes, max(KGc.shape[0] - 2, 2)))
+        vals, vecs = eigsh(KGc, k=ksolve, M=Kc, sigma=0.0, which='LM')
+        finite = np.isfinite(vals) & (np.abs(vals) > 1e-12)
+        vals = vals[finite]
+        vecs = vecs[:, finite]
+        lam = 1.0 / vals
+        pos = np.sort(lam[np.isfinite(lam) & (lam > 1e-8)])
     except Exception as e:
-        return {'ok':False,'message':f'Errore nel solve FEM: {e}'}
-    eig_list=[]
+        return {'ok': False, 'message': f'Errore nel solve FEM: {e}'}
+
+    eig_list = []
     for k in range(min(len(pos), vecs.shape[1])):
-        v=vecs[:,k]; vmax=np.max(np.abs(v)) if np.max(np.abs(v))>0 else 1.0; eig_list.append(v/vmax)
-    log_rows=[('Backend FEM','scikit-fem'),('Mesh conforme a bande','Sì'),('Mesh nx base',fem_nx),('Mesh ny base',fem_ny),('N ascisse effettive',len(xs)),('N ordinate effettive',len(ys)),('Elementi triangolari',int(mesh.t.shape[1])),('DOF liberi',int(Kc.shape[0])),('Sottodomini irrigidenti',int(tags.max())),('λcr',float(pos[0]) if len(pos) else np.nan)]
+        v = vecs[:, k]
+        vmax = np.max(np.abs(v)) if np.max(np.abs(v)) > 0 else 1.0
+        eig_list.append(v / vmax)
+
+    log_rows = [
+        ('Backend FEM', 'scikit-fem'),
+        ('Mesh conforme a bande', 'Sì'),
+        ('Mesh nx base', fem_nx),
+        ('Mesh ny base', fem_ny),
+        ('N ascisse effettive', len(xs)),
+        ('N ordinate effettive', len(ys)),
+        ('Elementi triangolari', int(mesh.t.shape[1])),
+        ('DOF liberi', int(Kc.shape[0])),
+        ('λcr', float(pos[0]) if len(pos) else np.nan),
+    ]
     for chk in connectivity_checks:
-        log_rows.append((f"Conn. stiffener chiuso #{chk['idx']}", f"ok={chk['ok']} | nodi bordo1={chk['nodes_border_1']} | nodi bordo2={chk['nodes_border_2']}"))
-    return {'ok':True,'lambda_cr':float(pos[0]) if len(pos) else np.nan,'phi_cr':float(pos[0]) if len(pos) else np.nan,'eigenvalues':pos,'eigs_df':pd.DataFrame({'Modo':np.arange(1,len(pos)+1),'lambda':pos}),'eigenvectors':eig_list,'basis_modes':[(i+1,1) for i in range(len(eig_list))],'a_mm':a_mm,'b_mm':b_mm,'ndof':int(Kc.shape[0]),'calc_log':pd.DataFrame(log_rows, columns=['Parametro','Valore']),'connectivity_checks': connectivity_checks}
+        log_rows.append((
+            f"Conn. stiffener chiuso #{chk['idx']}",
+            f"ok={chk['ok']} | nodi bordo1={chk['nodes_border_1']} | nodi bordo2={chk['nodes_border_2']}"
+        ))
+
+    return {
+        'ok': True,
+        'lambda_cr': float(pos[0]) if len(pos) else np.nan,
+        'phi_cr': float(pos[0]) if len(pos) else np.nan,
+        'eigenvalues': pos,
+        'eigs_df': pd.DataFrame({'Modo': np.arange(1, len(pos) + 1), 'lambda': pos}),
+        'eigenvectors': eig_list,
+        'basis_modes': [(i + 1, 1) for i in range(len(eig_list))],
+        'a_mm': a_mm,
+        'b_mm': b_mm,
+        'ndof': int(Kc.shape[0]),
+        'calc_log': pd.DataFrame(log_rows, columns=['Parametro', 'Valore']),
+        'connectivity_checks': connectivity_checks,
+    }
 
 def _mode_surface(inp,result,mode_index,nx=70,ny=45):
     a=result['a_mm']; b=result['b_mm']; Xv=np.linspace(0,a,nx); Yv=np.linspace(0,b,ny); X,Y=np.meshgrid(Xv,Yv,indexing='xy'); Z=np.zeros_like(X)
@@ -340,3 +406,51 @@ def make_fem_model_figure(inp, fem_nx=40, fem_ny=20):
     for (xs2,ys2,kind,side) in [([0,inp.a],[inp.b,inp.b],inp.edge_top,'top'),([0,inp.a],[0,0],inp.edge_bottom,'bottom'),([0,0],[0,inp.b],inp.edge_left,'left'),([inp.a,inp.a],[0,inp.b],inp.edge_right,'right')]:
         color,width,dash=_edge_style(kind); fig.add_trace(go.Scatter(x=xs2,y=ys2,mode='lines',line=dict(color=color,width=width,dash=dash),showlegend=False)); _draw_support_symbols(fig,inp.a,inp.b,kind,side)
     fig.update_layout(template='plotly_white',height=520,title='Modello FEM discretizzato (mesh conforme + sottodomini plate irrigidenti)',xaxis_title=f'a [{inp.unit}]',yaxis_title=f'b [{inp.unit}]',margin=dict(l=20,r=20,t=70,b=20)); fig.update_yaxes(scaleanchor='x',scaleratio=1); return fig
+
+def _build_stiffener_property_functions(inp):
+    """
+    Restituisce funzioni continue/piecewise sui punti (x, y) in mm:
+    - D_field(x, y): rigidezza flessionale equivalente locale
+    - mem_field(x, y): spessore membranale equivalente locale
+    """
+    tp = _mm(inp.t, inp.unit)
+    Dref = inp.E * tp**3 / (12 * (1 - inp.nu**2))
+
+    active = inp.stiffeners[inp.stiffeners['active']] if inp.stiffeners is not None and len(inp.stiffeners) > 0 else pd.DataFrame()
+
+    def D_field(x, y):
+        x = np.asarray(x)
+        y = np.asarray(y)
+        out = np.full_like(x, Dref, dtype=float)
+        if len(active) == 0:
+            return out
+        for _, st in active.iterrows():
+            loc = _mm(st['location'], inp.unit)
+            bw = _mm(st.get('band_width', max(6.0 * inp.t, 1.0)), inp.unit)
+            t_bend = _mm(st.get('t_eq_bend', inp.t), inp.unit)
+            Dloc = inp.E * t_bend**3 / (12 * (1 - inp.nu**2))
+            if st['orientation'] == 'longitudinale':
+                mask = np.abs(y - loc) <= bw / 2.0
+            else:
+                mask = np.abs(x - loc) <= bw / 2.0
+            out = np.where(mask, Dloc, out)
+        return out
+
+    def mem_field(x, y):
+        x = np.asarray(x)
+        y = np.asarray(y)
+        out = np.full_like(x, tp, dtype=float)
+        if len(active) == 0:
+            return out
+        for _, st in active.iterrows():
+            loc = _mm(st['location'], inp.unit)
+            bw = _mm(st.get('band_width', max(6.0 * inp.t, 1.0)), inp.unit)
+            t_mem = _mm(st.get('t_eq_mem', inp.t), inp.unit)
+            if st['orientation'] == 'longitudinale':
+                mask = np.abs(y - loc) <= bw / 2.0
+            else:
+                mask = np.abs(x - loc) <= bw / 2.0
+            out = np.where(mask, t_mem, out)
+        return out
+
+    return D_field, mem_field
