@@ -267,14 +267,29 @@ def solve_buckling_problem_fem(inp, fem_nx=40, fem_ny=20, n_modes=6):
     K = asm(k_form, basis)
     KG = asm(kg_form, basis)
 
-    x0 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0], 0.0))).all()
-    x1 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0], a_mm))).all()
-    y0 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1], 0.0))).all()
-    y1 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1], b_mm))).all()
+    x0 = basis.dofs.get_facet_dofs(
+        mesh.facets_satisfying(lambda x: np.isclose(x[0], 0.0))
+    ).all()
+    x1 = basis.dofs.get_facet_dofs(
+        mesh.facets_satisfying(lambda x: np.isclose(x[0], a_mm))
+    ).all()
+    y0 = basis.dofs.get_facet_dofs(
+        mesh.facets_satisfying(lambda x: np.isclose(x[1], 0.0))
+    ).all()
+    y1 = basis.dofs.get_facet_dofs(
+        mesh.facets_satisfying(lambda x: np.isclose(x[1], b_mm))
+    ).all()
+    
     D = np.unique(np.concatenate([x0, x1, y0, y1]))
-
-    Kc, _ = condense(K, D=D)
-    KGc, _ = condense(KG, D=D)
+    
+    def _extract_condensed_matrix(obj):
+        if isinstance(obj, tuple):
+            return obj[0]
+        return obj
+    
+    Kc = _extract_condensed_matrix(condense(K, D=D))
+    KGc = _extract_condensed_matrix(condense(KG, D=D))
+    
     Kc = Kc + 1e-9 * speye(Kc.shape[0])
 
     try:
