@@ -159,7 +159,7 @@ def _shape(m,n,x,y,a,b): return np.sin(m*np.pi*x/a)*np.sin(n*np.pi*y/b)
 def _integrate_plate(inp, fun):
     a=_mm(inp.a,inp.unit); b=_mm(inp.b,inp.unit); nx=35 if inp.complexity==1 else 45 if inp.complexity==2 else 55; ny=25 if inp.complexity==1 else 35 if inp.complexity==2 else 45
     xs=np.linspace(0,a,nx); ys=np.linspace(0,b,ny); X,Y=np.meshgrid(xs,ys,indexing='xy'); V=fun(X,Y)
-    return np.trapz(np.trapz(V,xs,axis=1),ys,axis=0)
+    return np.trapezoid(np.trapezoid(V,xs,axis=1),ys,axis=0)
 
 def solve_buckling_problem(inp):
     a=_mm(inp.a,inp.unit); b=_mm(inp.b,inp.unit); t=_mm(inp.t,inp.unit); D=inp.E*t**3/(12*(1-inp.nu**2)); Dx=D*(1+inp.beta_x); Dy=D*(1+inp.beta_y)
@@ -175,10 +175,10 @@ def solve_buckling_problem(inp):
                 return t*(fact_x*np.vectorize(sx)(X,Y)*wx_i*wx_j + fact_y*np.vectorize(sy)(X,Y)*wy_i*wy_j + 2*fact_t*np.vectorize(tau)(X,Y)*wx_i*wy_j)
             R0[i,j]=_integrate_plate(inp,f0); RG[i,j]=_integrate_plate(inp,fg)
             xs=np.linspace(0,a,100); ys=np.linspace(0,b,100)
-            if kp['top']>0: R0[i,j]+=np.trapz(kp['top']*_shape_y(mi,ni,xs,0.0,a,b)*_shape_y(mj,nj,xs,0.0,a,b),xs)
-            if kp['bottom']>0: R0[i,j]+=np.trapz(kp['bottom']*_shape_y(mi,ni,xs,b,a,b)*_shape_y(mj,nj,xs,b,a,b),xs)
-            if kp['left']>0: R0[i,j]+=np.trapz(kp['left']*_shape_x(mi,ni,0.0,ys,a,b)*_shape_x(mj,nj,0.0,ys,a,b),ys)
-            if kp['right']>0: R0[i,j]+=np.trapz(kp['right']*_shape_x(mi,ni,a,ys,a,b)*_shape_x(mj,nj,a,ys,a,b),ys)
+            if kp['top']>0: R0[i,j]+=np.trapezoid(kp['top']*_shape_y(mi,ni,xs,0.0,a,b)*_shape_y(mj,nj,xs,0.0,a,b),xs)
+            if kp['bottom']>0: R0[i,j]+=np.trapezoid(kp['bottom']*_shape_y(mi,ni,xs,b,a,b)*_shape_y(mj,nj,xs,b,a,b),xs)
+            if kp['left']>0: R0[i,j]+=np.trapezoid(kp['left']*_shape_x(mi,ni,0.0,ys,a,b)*_shape_x(mj,nj,0.0,ys,a,b),ys)
+            if kp['right']>0: R0[i,j]+=np.trapezoid(kp['right']*_shape_x(mi,ni,a,ys,a,b)*_shape_x(mj,nj,a,ys,a,b),ys)
     R0=0.5*(R0+R0.T); RG=0.5*(RG+RG.T); R0=R0+np.eye(N)*max(np.linalg.norm(R0,ord='fro')*1e-12,1e-9)
     eigvals,eigvecs=(sla.eig(R0,RG+np.eye(N)*1e-12) if SCIPY_OK else np.linalg.eig(np.linalg.pinv(RG+np.eye(N)*1e-12)@R0))
     eigvals=np.real(eigvals); eigvecs=np.real(eigvecs); mask=np.isfinite(eigvals)&(eigvals>1e-8); pos=eigvals[mask]; vec=eigvecs[:,mask]; order=np.argsort(pos); pos=pos[order]; vec=vec[:,order] if vec.size else vec
