@@ -3,3 +3,4 @@ pandas>=1.5
 numpy>=1.24
 plotly>=5.18
 scipy>=1.10
+scikit-fem>=12.0.0

@@ -1,19 +1,23 @@
-# BuckingPlate
 
-Web app professionale in **Python + Streamlit** per il **calcolo dell'instabilità elastica di piastre rettangolari in acciaio**.
+# EBPlateLite v1.6
 
-## Funzioni principali
-- piastra rettangolare con **w = 0** sui quattro bordi;
-- vincoli rotazionali: **semplice / fisso / elastico** con **Kr** e **J**;
-- piastra isotropa o ortotropa (**βx, ηx, βy, ηy**), con smearing di irrigidimenti uguali e regolari;
-- irrigidimenti longitudinali e trasversali: **general, flat bar, symmetrical flat bar, T, angle, trapezoid**;
-- stress analitici (**σx** ai quattro angoli, **σy** uniforme + patch loading, **τ** uniforme);
-- stress **meshed** via CSV con colonne `x,y,sigma_x,sigma_y,tau`;
-- risoluzione del problema agli autovalori con **serie di Fourier seno-seno**;
-- risultati: **φcr, σx,cr, σy,cr, τcr**, modi, superfici 3D e coefficienti **Aij**;
-- anteprima pre-analisi con **simboli dei vincoli** e **irrigidimenti visibili**.
+Pacchetto completo **attualmente implementato** con:
+
+- backend **semianalitico** tipo EBPlate;
+- backend **FEM equivalente** con **scikit-fem**;
+- preview della geometria e del modello FEM **prima del run**;
+- tab di **confronto metodi**;
+- supporto a irrigidimenti **aperti** e **chiusi** (`closed_section` / `closed box`);
+- per il backend FEM: 
+  - mesh conforme alle bande irrigidenti;
+  - sottodomini plate equivalenti con `t_eq_mem` e `t_eq_bend`;
+  - controllo di **connettività nodale** sui due bordi per irrigidimenti chiusi.
+
+## Nota tecnica
+Questo è il pacchetto completo **implementato oggi** nel perimetro delle librerie già usate nel progetto. Il backend FEM resta un modello **equivalente a sottodomini plate** e non un shell solver completo Gmsh + FEniCSx-Shells.
 
 ## Avvio
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
+```
