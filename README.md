@@ -1,4 +1,4 @@
-# EBPlateLite v1.1.2
+# BuckingPlate
 
 Web app professionale in **Python + Streamlit** per il **calcolo dell'instabilità elastica di piastre rettangolari in acciaio**.
 
