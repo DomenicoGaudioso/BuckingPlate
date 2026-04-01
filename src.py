@@ -771,15 +771,48 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
 # ============================================================================
 # Manual checks EC3-like
 # ============================================================================
+def _safe_float(v, default=np.nan):
+    try:
+        return float(v)
+    except Exception:
+        return default
 
 
-def estimate_psi_x_from_inputs(s_xtl, s_xbl, s_xtr, s_xbr) -> float:
+def _reference_stresses(inp):
+    sx_ref = max(abs(inp.s_xtl), abs(inp.s_xbl), abs(inp.s_xtr), abs(inp.s_xbr), 1e-9)
+    sy_ref = max(abs(inp.s_yut), abs(inp.s_yub), abs(inp.s_ypt), abs(inp.s_ypb), 1e-9)
+    tau_ref = max(abs(inp.tau_u), 1e-9)
+    return sx_ref, sy_ref, tau_ref
+
+
+def _psi_from_pair(s1, s2):
+    """
+    Stima operativa di psi = sigma_2 / sigma_1.
+    Usa come sigma_1 il bordo con modulo maggiore e limita il risultato
+    all'intervallo operativo [-3.0, 1.0].
+    """
+    s1 = float(s1)
+    s2 = float(s2)
+
+    if abs(s1) < 1e-12 and abs(s2) < 1e-12:
+        return 1.0
+
+    if abs(s2) > abs(s1):
+        s1, s2 = s2, s1
+
+    if abs(s1) <= 1e-12:
+        return 1.0
+
+    return float(np.clip(s2 / s1, -3.0, 1.0))
+
+
+def estimate_psi_x_from_inputs(s_xtl, s_xbl, s_xtr, s_xbr):
     s_top = 0.5 * (float(s_xtl) + float(s_xtr))
     s_bottom = 0.5 * (float(s_xbl) + float(s_xbr))
     return _psi_from_pair(s_top, s_bottom)
 
 
-def estimate_psi_y_from_inputs(s_yut, s_yub) -> float:
+def estimate_psi_y_from_inputs(s_yut, s_yub):
     return _psi_from_pair(float(s_yut), float(s_yub))
 
 
