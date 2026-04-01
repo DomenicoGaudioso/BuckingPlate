@@ -225,7 +225,7 @@ b1, b2 = st.columns(2)
 if b1.button('Calcola instabilita elastica (solver semianalitico)', use_container_width=True):
     st.session_state.sem_res = solve_buckling_problem(inp)
     manual_res = compute_ec3_manual_checks(inp, st.session_state.sem_res, st.session_state.fem_res)
-if b2.button('Calcola instabilita elastica con FEM (scikit-fem)', type='primary', use_container_width=True):
+if b2.button('Calcola instabilita elastica con FEM (OpenSeesPy)', type='primary', use_container_width=True):
     st.session_state.fem_res = solve_buckling_problem_fem(inp, fem_nx=fem_nx, fem_ny=fem_ny, n_modes=fem_modes)
     manual_res = compute_ec3_manual_checks(inp, st.session_state.sem_res, st.session_state.fem_res)
 
@@ -260,7 +260,7 @@ with T2:
         c3.metric('DOF', str(r['ndof']))
         if r.get('sanity_warning'):
             st.warning(r['sanity_warning'])
-        st.dataframe(summary_results_df(r, 'FEM scikit-fem equivalente'), use_container_width=True)
+        st.dataframe(summary_results_df(r, 'FEM OpenSeesPy (ShellMITC4)'), use_container_width=True)
         st.dataframe(r['eigs_df'], use_container_width=True, height=220)
         if len(r.get('eigenvalues', [])) > 0:
             st.plotly_chart(make_mode_figure(inp, r, 0), use_container_width=True)
