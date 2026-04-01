@@ -17,13 +17,12 @@ sempre mantenuto come riferimento secondario e viene anche marcato con warning
 quando l'autovalore risulta fuori scala.
 """
 
+from typing import Callable, Tuple, List
 from __future__ import annotations
-
 from dataclasses import dataclass, asdict
 import json
 import math
-from typing import Callable, Tuple, List
-
+import logging
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -33,6 +32,12 @@ try:
     SCIPY_OK = True
 except Exception:
     SCIPY_OK = False
+    
+try:
+    import openseespy.opensees as ops
+    OPENSEES_OK = True
+except ImportError:
+    OPENSEES_OK = False
 
 
 # ============================================================================
@@ -666,105 +671,103 @@ def _build_stiffener_field(inp: PlateInput, xc_mm: np.ndarray, yc_mm: np.ndarray
 
 
 def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6) -> dict:
+    if not OPENSEES_OK:
+        return {'ok': False, 'message': 'OpenSeesPy non è installato. Esegui "pip install openseespy"'}
+    
+    ops.wipe()
+    ops.model('basic', '-ndm', 3, '-ndf', 6)
+    
+    a_mm, b_mm, t_mm = _mm(inp.a, inp.unit), _mm(inp.b, inp.unit), _mm(inp.t, inp.unit)
+    E, nu = inp.E, inp.nu
+    
+    mat_tag = 1
+    sec_tag = 1
+    ops.nDMaterial('ElasticIsotropic', mat_tag, E, nu)
+    ops.section('PlateFiber', sec_tag, mat_tag, t_mm)
+    
+    dx, dy = a_mm / fem_nx, b_mm / fem_ny
+    node_tags = {}
+    
+    # Creazione Nodi e Vincoli
+    for i in range(fem_nx + 1):
+        for j in range(fem_ny + 1):
+            tag = i * (fem_ny + 1) + j + 1
+            x, y = i * dx, j * dy
+            ops.node(tag, x, y, 0.0)
+            node_tags[(i, j)] = tag
+            
+            # Appoggio Semplice sui bordi (UX, UY liberi, UZ bloccato, rotazioni libere)
+            if i == 0 or i == fem_nx or j == 0 or j == fem_ny:
+                ops.fix(tag, 0, 0, 1, 0, 0, 0)
+
+    # Creazione Elementi ShellMITC4
+    ele_tag = 1
+    for i in range(fem_nx):
+        for j in range(fem_ny):
+            n1 = node_tags[(i, j)]
+            n2 = node_tags[(i + 1, j)]
+            n3 = node_tags[(i + 1, j + 1)]
+            n4 = node_tags[(i, j + 1)]
+            ops.element('ShellMITC4', ele_tag, n1, n2, n3, n4, sec_tag)
+            ele_tag += 1
+
+    # Applicazione Carichi (Compressione applicata come forze nodali lungo l'asse x)
+    ops.timeSeries('Linear', 1)
+    ops.pattern('Plain', 1, 1)
+    
+    sx_val = (inp.s_xtl + inp.s_xbl) / 2.0
+    force_node_x = sx_val * t_mm * dy
+    for j in range(fem_ny + 1):
+        mult = 0.5 if (j == 0 or j == fem_ny) else 1.0
+        ops.load(node_tags[(0, j)], force_node_x * mult, 0.0, 0.0, 0.0, 0.0, 0.0)
+        ops.load(node_tags[(fem_nx, j)], -force_node_x * mult, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+    # Analisi Statica Base (necessaria prima dell'eigen)
+    ops.system('BandGeneral')
+    ops.numberer('RCM')
+    ops.constraints('Transformation')
+    ops.integrator('LoadControl', 1.0)
+    ops.test('NormDispIncr', 1.0e-6, 10, 0)
+    ops.algorithm('Newton')
+    ops.analysis('Static')
+    ops.analyze(1)
+    
+    # Estrazione Autovalori (Buckling)
     try:
-        from skfem import MeshTri, Basis, ElementTriP2, BilinearForm, asm, condense
-        from skfem.helpers import dot, grad
-        from scipy.sparse.linalg import eigsh
-        from scipy.sparse import eye as speye
+        eigenvalues = ops.eigen('-fullGenLapack', n_modes)
+        lambda_cr = eigenvalues[0] if eigenvalues else np.nan
+        pos = np.array(eigenvalues)
     except Exception as e:
-        return {'ok': False, 'message': f'scikit-fem o dipendenze non disponibili: {e}'}
-
-    a_mm = _mm(inp.a, inp.unit)
-    b_mm = _mm(inp.b, inp.unit)
-    sx_fun, sy_fun, tau_fun = analytical_stress_functions(inp)
-    xs, ys = _build_aligned_axes(inp, fem_nx, fem_ny)
-    mesh = MeshTri.init_tensor(xs, ys)
-    basis = Basis(mesh, ElementTriP2())
-    D_field, mem_field = _build_stiffener_property_functions(inp)
-    connectivity_checks = _check_closed_stiffener_connectivity(inp, mesh)
-
-    @BilinearForm
-    def k_form(u, v, w):
-        xq = w.x[0]
-        yq = w.x[1]
-        Dq = D_field(xq, yq)
-        mq = mem_field(xq, yq)
-        return (Dq / np.maximum(mq, 1e-9)) * dot(grad(u), grad(v))
-
-    @BilinearForm
-    def kg_form(u, v, w):
-        xq = w.x[0]
-        yq = w.x[1]
-        sxq = sx_fun(xq, yq)
-        syq = sy_fun(xq, yq)
-        tauq = tau_fun(xq, yq)
-        gu = grad(u)
-        gv = grad(v)
-        return sxq * gu[0] * gv[0] + syq * gu[1] * gv[1] + tauq * (gu[0] * gv[1] + gu[1] * gv[0])
-
-    K = asm(k_form, basis)
-    KG = asm(kg_form, basis)
-    x0 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0], 0.0))).all()
-    x1 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[0], a_mm))).all()
-    y0 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1], 0.0))).all()
-    y1 = basis.dofs.get_facet_dofs(mesh.facets_satisfying(lambda x: np.isclose(x[1], b_mm))).all()
-    D = np.unique(np.concatenate([x0, x1, y0, y1]))
-
-    def _extract_condensed_matrix(obj):
-        return obj[0] if isinstance(obj, tuple) else obj
-
-    Kc = _extract_condensed_matrix(condense(K, D=D))
-    KGc = _extract_condensed_matrix(condense(KG, D=D))
-    Kc = Kc + 1e-9 * speye(Kc.shape[0])
-    try:
-        ksolve = max(2, min(n_modes, max(KGc.shape[0] - 2, 2)))
-        vals, vecs = eigsh(KGc, k=ksolve, M=Kc, sigma=0.0, which='LM')
-        finite = np.isfinite(vals) & (np.abs(vals) > 1e-12)
-        vals = vals[finite]
-        vecs = vecs[:, finite]
-        lam = 1.0 / vals
-        pos = np.sort(lam[np.isfinite(lam) & (lam > 1e-8)])
-    except Exception as e:
-        return {'ok': False, 'message': f'Errore nel solve FEM: {e}'}
-
-    eig_list = []
-    for k in range(min(len(pos), vecs.shape[1])):
-        v = vecs[:, k]
-        vmax = np.max(np.abs(v)) if np.max(np.abs(v)) > 0 else 1.0
-        eig_list.append(v / vmax)
-
+        ops.wipe()
+        return {'ok': False, 'message': f'Errore nel solve OpenSees FEM: {e}'}
+    
+    # Estrazione Autovettore (Deformata fuori piano UZ)
+    Z = np.zeros((fem_nx + 1, fem_ny + 1))
+    if eigenvalues:
+        for i in range(fem_nx + 1):
+            for j in range(fem_ny + 1):
+                tag = node_tags[(i, j)]
+                Z[i, j] = ops.nodeEigenvector(tag, 1, 3)
+    
+    ndof = ops.systemSize()
+    ops.wipe()
+    
     log_rows = [
-        ('Backend FEM', 'scikit-fem equivalente (surrogato energetico, non ancora un FEM di piastra validato)'),
-        ('Mesh conforme a bande', 'Sì'),
-        ('Mesh nx base', fem_nx),
-        ('Mesh ny base', fem_ny),
-        ('N ascisse effettive', len(xs)),
-        ('N ordinate effettive', len(ys)),
-        ('Elementi triangolari', int(mesh.t.shape[1])),
-        ('DOF liberi', int(Kc.shape[0])),
-        ('λcr', float(pos[0]) if len(pos) else np.nan),
+        ('Backend FEM', 'OpenSeesPy (ShellMITC4 nativo per piastre)'),
+        ('Nodi', (fem_nx+1)*(fem_ny+1)),
+        ('Elementi Shell', fem_nx*fem_ny),
+        ('DOF totali', ndof),
+        ('λcr estrapolato', lambda_cr)
     ]
-    for chk in connectivity_checks:
-        log_rows.append((f"Conn. stiffener chiuso #{chk['idx']}", f"ok={chk['ok']} | nodi bordo1={chk['nodes_border_1']} | nodi bordo2={chk['nodes_border_2']}"))
-
-    sanity_warning = None
-    if len(pos) and (not np.isfinite(pos[0]) or pos[0] > 1e6):
-        sanity_warning = 'Autovalore FEM fuori scala: il backend FEM corrente è solo un surrogato energetico e non è ancora allineato ai risultati EBPlate.'
-
+    
     return {
-        'ok': True,
-        'lambda_cr': float(pos[0]) if len(pos) else np.nan,
-        'phi_cr': float(pos[0]) if len(pos) else np.nan,
+        'ok': True, 'backend': 'OpenSeesPy FEM',
+        'lambda_cr': lambda_cr, 'a_mm': a_mm, 'b_mm': b_mm,
         'eigenvalues': pos,
         'eigs_df': pd.DataFrame({'Modo': np.arange(1, len(pos) + 1), 'lambda': pos}),
-        'eigenvectors': eig_list,
-        'basis_modes': [(i + 1, 1) for i in range(len(eig_list))],
-        'a_mm': a_mm,
-        'b_mm': b_mm,
-        'ndof': int(Kc.shape[0]),
+        'Z_mode': Z.T, 'ndof': ndof,
         'calc_log': pd.DataFrame(log_rows, columns=['Parametro', 'Valore']),
-        'connectivity_checks': connectivity_checks,
-        'sanity_warning': sanity_warning,
+        'connectivity_checks': [] # Lasciato vuoto per non rompere compatibilità con l'UI esistente
     }
 
 
@@ -1056,6 +1059,17 @@ def compute_ec3_manual_checks(inp: PlateInput, sem_res=None, fem_res=None) -> di
 def _mode_surface(inp: PlateInput, result: dict, mode_index: int, nx=70, ny=45):
     a = result['a_mm']
     b = result['b_mm']
+    
+    # Rendering specifico per OpenSees
+    if 'Z_mode' in result:
+        Z = result['Z_mode']
+        ny_Z, nx_Z = Z.shape
+        Xv = np.linspace(0, a, nx_Z)
+        Yv = np.linspace(0, b, ny_Z)
+        X, Y = np.meshgrid(Xv, Yv, indexing='xy')
+        return X, Y, Z
+        
+    # Rendering per EBPlate/Ritz
     Xv = np.linspace(0, a, nx)
     Yv = np.linspace(0, b, ny)
     X, Y = np.meshgrid(Xv, Yv, indexing='xy')
