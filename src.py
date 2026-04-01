@@ -17,12 +17,13 @@ sempre mantenuto come riferimento secondario e viene anche marcato con warning
 quando l'autovalore risulta fuori scala.
 """
 
-from typing import Callable, Tuple, List
 from __future__ import annotations
+
 from dataclasses import dataclass, asdict
 import json
 import math
-import logging
+from typing import Callable, Tuple, List
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
