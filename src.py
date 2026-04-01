@@ -888,16 +888,37 @@ def compute_ec3_manual_checks(inp: PlateInput, sem_res=None, fem_res=None) -> di
     a_mm = _mm(inp.a, inp.unit)
     b_mm = _mm(inp.b, inp.unit)
     sx_ref, sy_ref, tau_ref = _reference_stresses(inp)
+
     longi_pos = _stiffener_positions(inp, 'longitudinale')
     trans_pos = _stiffener_positions(inp, 'trasversale')
+
     x_subpanels = _subpanel_spans(b_mm, longi_pos) or [(0.0, b_mm, b_mm)]
     y_subpanels = _subpanel_spans(a_mm, trans_pos) or [(0.0, a_mm, a_mm)]
-    x_rows = _manual_axis_rows(inp, 'x', getattr(inp, 'panel_type_x', 'internal'), getattr(inp, 'psi_x', 1.0), a_mm, x_subpanels)
-    y_rows = _manual_axis_rows(inp, 'y', getattr(inp, 'panel_type_y', 'internal'), getattr(inp, 'psi_y', 1.0), b_mm, y_subpanels)
+
+    x_rows = _manual_axis_rows(
+        inp,
+        'x',
+        getattr(inp, 'panel_type_x', 'internal'),
+        getattr(inp, 'psi_x', 1.0),
+        a_mm,
+        x_subpanels,
+    )
+    y_rows = _manual_axis_rows(
+        inp,
+        'y',
+        getattr(inp, 'panel_type_y', 'internal'),
+        getattr(inp, 'psi_y', 1.0),
+        b_mm,
+        y_subpanels,
+    )
+
     manual_sigma_x = min([r['sigma_cr'] for r in x_rows]) if x_rows else np.nan
     manual_sigma_y = min([r['sigma_cr'] for r in y_rows]) if y_rows else np.nan
+
     gov_x = min(x_rows, key=lambda r: r['sigma_cr']) if x_rows else {}
     gov_y = min(y_rows, key=lambda r: r['sigma_cr']) if y_rows else {}
+
+    # Shear manuale mantenuto come placeholder classico
     shear_k = 5.34 + 4.0 / max((a_mm / max(b_mm, 1e-9)) ** 2, 1e-9)
     tau_cr = ec3_sigma_cr_uniform(inp.E, inp.nu, _mm(inp.t, inp.unit), b_mm, shear_k)
 
@@ -927,10 +948,34 @@ def compute_ec3_manual_checks(inp: PlateInput, sem_res=None, fem_res=None) -> di
     compare_rows = []
     if sem_res is not None:
         compare_rows += [
-            {'Parametro': 'sigma_x,cr', 'EBPlate': sem_res.get('sigma_x_cr', np.nan), 'Manuale EC3': manual_sigma_x, 'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan, 'Scarto EBPlate vs Manuale [%]': _pct_diff(sem_res.get('sigma_x_cr', np.nan), manual_sigma_x)},
-            {'Parametro': 'sigma_y,cr', 'EBPlate': sem_res.get('sigma_y_cr', np.nan), 'Manuale EC3': manual_sigma_y, 'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan, 'Scarto EBPlate vs Manuale [%]': _pct_diff(sem_res.get('sigma_y_cr', np.nan), manual_sigma_y)},
-            {'Parametro': 'tau_cr', 'EBPlate': sem_res.get('tau_cr', np.nan), 'Manuale EC3': tau_cr, 'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan, 'Scarto EBPlate vs Manuale [%]': _pct_diff(sem_res.get('tau_cr', np.nan), tau_cr)},
-            {'Parametro': 'phi_cr / lambda_cr', 'EBPlate': sem_res.get('phi_cr', np.nan), 'Manuale EC3': np.nan, 'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan, 'Scarto EBPlate vs Manuale [%]': np.nan},
+            {
+                'Parametro': 'sigma_x,cr',
+                'EBPlate': sem_res.get('sigma_x_cr', np.nan),
+                'Manuale EC3': manual_sigma_x,
+                'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan,
+                'Scarto EBPlate vs Manuale [%]': _pct_diff(sem_res.get('sigma_x_cr', np.nan), manual_sigma_x),
+            },
+            {
+                'Parametro': 'sigma_y,cr',
+                'EBPlate': sem_res.get('sigma_y_cr', np.nan),
+                'Manuale EC3': manual_sigma_y,
+                'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan,
+                'Scarto EBPlate vs Manuale [%]': _pct_diff(sem_res.get('sigma_y_cr', np.nan), manual_sigma_y),
+            },
+            {
+                'Parametro': 'tau_cr',
+                'EBPlate': sem_res.get('tau_cr', np.nan),
+                'Manuale EC3': tau_cr,
+                'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan,
+                'Scarto EBPlate vs Manuale [%]': _pct_diff(sem_res.get('tau_cr', np.nan), tau_cr),
+            },
+            {
+                'Parametro': 'phi_cr / lambda_cr',
+                'EBPlate': sem_res.get('phi_cr', np.nan),
+                'Manuale EC3': np.nan,
+                'FEM equivalente': fem_res.get('lambda_cr', np.nan) if (fem_res and fem_res.get('ok', False)) else np.nan,
+                'Scarto EBPlate vs Manuale [%]': np.nan,
+            },
         ]
 
     ksigma_table = pd.DataFrame([
@@ -938,14 +983,17 @@ def compute_ec3_manual_checks(inp: PlateInput, sem_res=None, fem_res=None) -> di
         {'Tipo pannello': 'internal', 'Caso': 'web in flessione uniforme', 'k_sigma': 'stessa base teorica di piastra; la figura del documento mostra poi rho e b_eff'},
         {'Tipo pannello': 'external', 'Caso': 'non implementato normativamente nel documento allegato', 'k_sigma': 'da validare con EN 1993-1-5 completo'},
     ])
+
     rho_table = pd.DataFrame([
         {'Tipo pannello': 'internal', 'Soglia lambda_p': '0.5 + sqrt(0.085 - 0.055*psi)', 'rho': '1.0 se lambda_p <= soglia; altrimenti (lambda_p - 0.055(3+psi))/lambda_p^2'},
     ])
+
     beff_table = pd.DataFrame([
         {'Tipo pannello': 'internal', 'Caso': 'compressione uniforme', 'b_eff': 'rho*b', 'be1/be2': '0.5 b_eff / 0.5 b_eff'},
         {'Tipo pannello': 'internal', 'Caso': 'anima in flessione uniforme', 'b_eff': 'rho*b/2 sulla meta compressa', 'be1/be2': '0.6 b_eff / 0.4 b_eff'},
         {'Tipo pannello': 'external', 'Caso': 'operativo', 'b_eff': 'rho*b', 'be1/be2': 'b_eff / 0'},
     ])
+
     calc_log_rows = [
         ('Riferimento principale', 'EN 1993-1-5 come richiamato dal workflow documentale allegato'),
         ('Implementato ora', 'lambda_p = sqrt(fy/sigma_cr), rho interno e b_eff = rho*b'),
@@ -953,6 +1001,7 @@ def compute_ec3_manual_checks(inp: PlateInput, sem_res=None, fem_res=None) -> di
         ('Nota', 'k_sigma usa al momento la formula teorica di buckling per compressione uniforme; i casi normativi completi external/psi generico richiedono il testo completo EN 1993-1-5'),
         ('Nota', 'il backend FEM corrente resta un surrogato energetico e non e ancora allineato ai risultati EBPlate'),
     ]
+
     return {
         'sigma_x_manual_cr': manual_sigma_x,
         'sigma_y_manual_cr': manual_sigma_y,
@@ -962,10 +1011,9 @@ def compute_ec3_manual_checks(inp: PlateInput, sem_res=None, fem_res=None) -> di
         'compare_df': pd.DataFrame(compare_rows),
         'ksigma_table_df': ksigma_table,
         'rho_table_df': rho_table,
-        'beff_table_df': beff_table,
+        'beff_table_df': beff_table,   # <-- questa chiave deve esistere sempre
         'calc_log': pd.DataFrame(calc_log_rows, columns=['Voce', 'Nota']),
     }
-
 
 # ============================================================================
 # Post-processing, grafici, export
