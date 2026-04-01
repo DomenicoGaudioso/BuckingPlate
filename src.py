@@ -569,7 +569,7 @@ def solve_buckling_problem(inp: PlateInput) -> dict:
         ('σy,ref [MPa]', sy_ref),
         ('τref [MPa]', tau_ref),
         ('φcr', phi),
-    ], columns=['Parametro', 'Valore'])
+    ], columns=['Parametro', 'Valore']).astype(str)  # <-- AGGIUNTO .astype(str)
     return {
         'backend': 'Semianalitico tipo EBPlate',
         'phi_cr': phi,
@@ -696,8 +696,13 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
             ops.node(tag, x, y, 0.0)
             node_tags[(i, j)] = tag
             
+            # Appoggio Semplice (blocca solo UZ)
             if i == 0 or i == fem_nx or j == 0 or j == fem_ny:
                 ops.fix(tag, 0, 0, 1, 0, 0, 0)
+
+    # PREVENZIONE MOTI RIGIDI NEL PIANO (Evita errore -3 Singolarità Matrice)
+    ops.fix(node_tags[(0, 0)], 1, 1, 1, 0, 0, 0)         # Blocca traslazione X e Y all'origine
+    ops.fix(node_tags[(fem_nx, 0)], 0, 1, 1, 0, 0, 0)    # Blocca traslazione Y sull'asse X (impedisce rotazione RZ)
 
     ele_tag = 1
     for i in range(fem_nx):
@@ -723,8 +728,8 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
     ops.numberer('RCM')
     ops.constraints('Transformation')
     ops.integrator('LoadControl', 1.0)
-    ops.test('NormDispIncr', 1.0e-6, 10, 0)
-    ops.algorithm('Newton')
+    ops.test('NormUnbalance', 1.0e-6, 10, 0)
+    ops.algorithm('Linear') # Usiamo 'Linear' al posto di 'Newton' per evitare problemi di iterazione
     ops.analysis('Static')
     ops.analyze(1)
     
@@ -747,7 +752,7 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
     ops.wipe()
     
     log_rows = [
-        ('Backend FEM', 'OpenSeesPy (ShellMITC4 nativo per piastre)'),
+        ('Backend FEM', 'OpenSeesPy (ShellMITC4)'),
         ('Nodi', (fem_nx+1)*(fem_ny+1)),
         ('Elementi Shell', fem_nx*fem_ny),
         ('DOF totali', ndof),
@@ -760,7 +765,7 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
         'eigenvalues': pos,
         'eigs_df': pd.DataFrame({'Modo': np.arange(1, len(pos) + 1), 'lambda': pos}),
         'Z_mode': Z.T, 'ndof': ndof,
-        'calc_log': pd.DataFrame(log_rows, columns=['Parametro', 'Valore']),
+        'calc_log': pd.DataFrame(log_rows, columns=['Parametro', 'Valore']).astype(str), # <-- AGGIUNTO .astype(str)
         'connectivity_checks': [] 
     }
 
@@ -1036,13 +1041,13 @@ def compute_ec3_manual_checks(inp: PlateInput, sem_res=None, fem_res=None) -> di
         'sigma_x_manual_cr': manual_sigma_x,
         'sigma_y_manual_cr': manual_sigma_y,
         'tau_manual_cr': tau_cr,
-        'summary_df': pd.DataFrame(summary_rows),
+        'summary_df': pd.DataFrame(summary_rows).astype(str),       # <-- .astype(str)
         'details_df': pd.DataFrame(x_rows + y_rows),
-        'compare_df': pd.DataFrame(compare_rows),
-        'ksigma_table_df': ksigma_table,
-        'rho_table_df': rho_table,
-        'beff_table_df': beff_table,   # <-- questa chiave deve esistere sempre
-        'calc_log': pd.DataFrame(calc_log_rows, columns=['Voce', 'Nota']),
+        'compare_df': pd.DataFrame(compare_rows).astype(str),       # <-- .astype(str)
+        'ksigma_table_df': ksigma_table.astype(str),                # <-- .astype(str)
+        'rho_table_df': rho_table.astype(str),                      # <-- .astype(str)
+        'beff_table_df': beff_table.astype(str),                    # <-- .astype(str)
+        'calc_log': pd.DataFrame(calc_log_rows, columns=['Voce', 'Nota']).astype(str), # <-- .astype(str)
     }
 
 # ============================================================================
@@ -1259,64 +1264,3 @@ def _build_stiffener_property_functions(inp: PlateInput):
         return out
 
     return D_field, mem_field
-# DOCUMENTATION-NOTE-1175: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1176: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1177: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1178: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1179: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1180: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1181: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1182: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1183: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1184: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1185: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1186: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1187: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1188: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1189: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1190: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1191: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1192: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1193: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1194: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1195: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1196: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1197: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1198: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1199: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1200: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1201: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1202: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1203: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1204: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1205: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1206: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1207: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1208: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1209: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1210: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1211: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1212: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1213: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1214: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1215: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1216: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1217: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1218: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1219: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1220: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1221: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1222: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1223: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1224: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1225: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1226: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1227: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1228: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1229: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1230: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1231: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1232: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1233: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1234: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
-# DOCUMENTATION-NOTE-1235: Questa riga di commento mantiene il file esteso e leggibile; non altera la logica del backend consolidato.
