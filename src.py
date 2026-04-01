@@ -32,7 +32,7 @@ try:
     SCIPY_OK = True
 except Exception:
     SCIPY_OK = False
-    
+
 try:
     import openseespy.opensees as ops
     OPENSEES_OK = True
@@ -688,7 +688,6 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
     dx, dy = a_mm / fem_nx, b_mm / fem_ny
     node_tags = {}
     
-    # Creazione Nodi e Vincoli
     for i in range(fem_nx + 1):
         for j in range(fem_ny + 1):
             tag = i * (fem_ny + 1) + j + 1
@@ -696,11 +695,9 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
             ops.node(tag, x, y, 0.0)
             node_tags[(i, j)] = tag
             
-            # Appoggio Semplice sui bordi (UX, UY liberi, UZ bloccato, rotazioni libere)
             if i == 0 or i == fem_nx or j == 0 or j == fem_ny:
                 ops.fix(tag, 0, 0, 1, 0, 0, 0)
 
-    # Creazione Elementi ShellMITC4
     ele_tag = 1
     for i in range(fem_nx):
         for j in range(fem_ny):
@@ -711,7 +708,6 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
             ops.element('ShellMITC4', ele_tag, n1, n2, n3, n4, sec_tag)
             ele_tag += 1
 
-    # Applicazione Carichi (Compressione applicata come forze nodali lungo l'asse x)
     ops.timeSeries('Linear', 1)
     ops.pattern('Plain', 1, 1)
     
@@ -722,7 +718,6 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
         ops.load(node_tags[(0, j)], force_node_x * mult, 0.0, 0.0, 0.0, 0.0, 0.0)
         ops.load(node_tags[(fem_nx, j)], -force_node_x * mult, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-    # Analisi Statica Base (necessaria prima dell'eigen)
     ops.system('BandGeneral')
     ops.numberer('RCM')
     ops.constraints('Transformation')
@@ -732,7 +727,6 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
     ops.analysis('Static')
     ops.analyze(1)
     
-    # Estrazione Autovalori (Buckling)
     try:
         eigenvalues = ops.eigen('-fullGenLapack', n_modes)
         lambda_cr = eigenvalues[0] if eigenvalues else np.nan
@@ -741,7 +735,6 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
         ops.wipe()
         return {'ok': False, 'message': f'Errore nel solve OpenSees FEM: {e}'}
     
-    # Estrazione Autovettore (Deformata fuori piano UZ)
     Z = np.zeros((fem_nx + 1, fem_ny + 1))
     if eigenvalues:
         for i in range(fem_nx + 1):
@@ -767,7 +760,7 @@ def solve_buckling_problem_fem(inp: PlateInput, fem_nx=40, fem_ny=20, n_modes=6)
         'eigs_df': pd.DataFrame({'Modo': np.arange(1, len(pos) + 1), 'lambda': pos}),
         'Z_mode': Z.T, 'ndof': ndof,
         'calc_log': pd.DataFrame(log_rows, columns=['Parametro', 'Valore']),
-        'connectivity_checks': [] # Lasciato vuoto per non rompere compatibilità con l'UI esistente
+        'connectivity_checks': [] 
     }
 
 
@@ -1060,7 +1053,6 @@ def _mode_surface(inp: PlateInput, result: dict, mode_index: int, nx=70, ny=45):
     a = result['a_mm']
     b = result['b_mm']
     
-    # Rendering specifico per OpenSees
     if 'Z_mode' in result:
         Z = result['Z_mode']
         ny_Z, nx_Z = Z.shape
@@ -1069,7 +1061,6 @@ def _mode_surface(inp: PlateInput, result: dict, mode_index: int, nx=70, ny=45):
         X, Y = np.meshgrid(Xv, Yv, indexing='xy')
         return X, Y, Z
         
-    # Rendering per EBPlate/Ritz
     Xv = np.linspace(0, a, nx)
     Yv = np.linspace(0, b, ny)
     X, Y = np.meshgrid(Xv, Yv, indexing='xy')
