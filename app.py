@@ -109,7 +109,7 @@ stiff_df = pd.DataFrame(g('stiffeners', default_stiffeners_df().to_dict(orient='
 stiff_df = st.data_editor(
     stiff_df,
     num_rows='dynamic',
-    use_container_width=True,
+    width='stretch',
     column_config={
         'active': st.column_config.CheckboxColumn('Attivo'),
         'closed_section': st.column_config.CheckboxColumn('Sezione chiusa'),
@@ -125,7 +125,7 @@ if smear and not props_df.empty:
     st.info(f'Smearing -> beta_x={beta_x:.4f}, eta_x={eta_x:.4f}, beta_y={beta_y:.4f}, eta_y={eta_y:.4f}')
 if not props_df.empty:
     cols = [c for c in ['active', 'closed_section', 'orientation', 'type', 'location', 'band_width', 't_eq_mem', 't_eq_bend', 'gamma', 'theta', 'J_eff'] if c in props_df.columns]
-    st.dataframe(props_df[cols], use_container_width=True, height=260)
+    st.dataframe(props_df[cols], width='stretch', height=260)
 
 st.subheader('3) Tensioni nel piano')
 s1, s2, s3 = st.columns(3)
@@ -216,16 +216,16 @@ manual_res = compute_ec3_manual_checks(inp, st.session_state.sem_res, st.session
 st.subheader('Anteprima pre-analisi')
 g1, g2 = st.columns(2)
 with g1:
-    st.plotly_chart(make_plate_preview_figure(inp), use_container_width=True)
+    st.plotly_chart(make_plate_preview_figure(inp), width='stretch')
 with g2:
-    st.plotly_chart(make_fem_model_figure(inp, fem_nx=fem_nx, fem_ny=fem_ny), use_container_width=True)
-    st.dataframe(make_stiffener_summary_df(inp.stiffeners), use_container_width=True, height=220)
+    st.plotly_chart(make_fem_model_figure(inp, fem_nx=fem_nx, fem_ny=fem_ny), width='stretch')
+    st.dataframe(make_stiffener_summary_df(inp.stiffeners), width='stretch', height=220)
 
 b1, b2 = st.columns(2)
-if b1.button('Calcola instabilita elastica (solver semianalitico)', use_container_width=True):
+if b1.button('Calcola instabilita elastica (solver semianalitico)', width='stretch'):
     st.session_state.sem_res = solve_buckling_problem(inp)
     manual_res = compute_ec3_manual_checks(inp, st.session_state.sem_res, st.session_state.fem_res)
-if b2.button('Calcola instabilita elastica con FEM (OpenSeesPy)', type='primary', use_container_width=True):
+if b2.button('Calcola instabilita elastica con FEM (OpenSeesPy)', type='primary', width='stretch'):
     st.session_state.fem_res = solve_buckling_problem_fem(inp, fem_nx=fem_nx, fem_ny=fem_ny, n_modes=fem_modes)
     manual_res = compute_ec3_manual_checks(inp, st.session_state.sem_res, st.session_state.fem_res)
 
@@ -241,11 +241,11 @@ with T1:
         c2.metric('sigma_x,cr', f"{r['sigma_x_cr']:.2f}")
         c3.metric('sigma_y,cr', f"{r['sigma_y_cr']:.2f}")
         c4.metric('tau_cr', f"{r['tau_cr']:.2f}")
-        st.dataframe(summary_results_df(r, 'Semianalitico tipo EBPlate'), use_container_width=True)
-        st.dataframe(r['modes_df'], use_container_width=True, height=220)
+        st.dataframe(summary_results_df(r, 'Semianalitico tipo EBPlate'), width='stretch')
+        st.dataframe(r['modes_df'], width='stretch', height=220)
         if len(r.get('phi_positive', [])) > 0:
-            st.plotly_chart(make_mode_figure(inp, r, 0), use_container_width=True)
-        st.dataframe(r['calc_log'], use_container_width=True, height=260)
+            st.plotly_chart(make_mode_figure(inp, r, 0), width='stretch')
+        st.dataframe(r['calc_log'], width='stretch', height=260)
 
 with T2:
     r = st.session_state.fem_res
@@ -260,53 +260,53 @@ with T2:
         c3.metric('DOF', str(r['ndof']))
         if r.get('sanity_warning'):
             st.warning(r['sanity_warning'])
-        st.dataframe(summary_results_df(r, 'FEM OpenSeesPy (ShellMITC4)'), use_container_width=True)
-        st.dataframe(r['eigs_df'], use_container_width=True, height=220)
+        st.dataframe(summary_results_df(r, 'FEM OpenSeesPy (ShellMITC4)'), width='stretch')
+        st.dataframe(r['eigs_df'], width='stretch', height=220)
         if len(r.get('eigenvalues', [])) > 0:
-            st.plotly_chart(make_mode_figure(inp, r, 0), use_container_width=True)
-        st.dataframe(r['calc_log'], use_container_width=True, height=260)
+            st.plotly_chart(make_mode_figure(inp, r, 0), width='stretch')
+        st.dataframe(r['calc_log'], width='stretch', height=260)
         if 'connectivity_checks' in r and len(r['connectivity_checks']) > 0:
             st.markdown('**Controlli di connettivita irrigidimenti chiusi**')
-            st.dataframe(pd.DataFrame(r['connectivity_checks']), use_container_width=True)
+            st.dataframe(pd.DataFrame(r['connectivity_checks']), width='stretch')
 
 with T3:
     st.dataframe(
         manual_res.get('summary_df', pd.DataFrame()),
-        use_container_width=True,
+        width='stretch',
         height=360
     )
 
     st.markdown('**Tabella k_sigma**')
     st.dataframe(
         manual_res.get('ksigma_table_df', pd.DataFrame()),
-        use_container_width=True,
+        width='stretch',
         height=180
     )
 
     st.markdown('**Tabella rho**')
     st.dataframe(
         manual_res.get('rho_table_df', pd.DataFrame()),
-        use_container_width=True,
+        width='stretch',
         height=140
     )
 
     st.markdown('**Tabella larghezze efficaci**')
     st.dataframe(
         manual_res.get('beff_table_df', pd.DataFrame()),
-        use_container_width=True,
+        width='stretch',
         height=180
     )
 
     st.markdown('**Dettaglio subpannelli**')
     st.dataframe(
         manual_res.get('details_df', pd.DataFrame()),
-        use_container_width=True,
+        width='stretch',
         height=320
     )
 
     st.dataframe(
         manual_res.get('calc_log', pd.DataFrame()),
-        use_container_width=True,
+        width='stretch',
         height=220
     )
 
@@ -317,10 +317,10 @@ with T3:
     )
     
 with T4:
-    st.dataframe(make_compare_df(st.session_state.sem_res, st.session_state.fem_res, manual_res), use_container_width=True)
+    st.dataframe(make_compare_df(st.session_state.sem_res, st.session_state.fem_res, manual_res), width='stretch')
     if not manual_res['compare_df'].empty:
         st.markdown('**Confronto EBPlate ↔ EC3 manuale**')
-        st.dataframe(manual_res['compare_df'], use_container_width=True)
+        st.dataframe(manual_res['compare_df'], width='stretch')
 
 with T5:
     log_blocks = []
@@ -336,6 +336,6 @@ with T5:
         fem_log = st.session_state.fem_res['calc_log'].copy(); fem_log.columns = ['Voce', 'Stato']; log_blocks.append(fem_log)
     man_log = manual_res['calc_log'].copy(); man_log.columns = ['Voce', 'Stato']; log_blocks.append(man_log)
     full_log = pd.concat(log_blocks, ignore_index=True)
-    st.dataframe(full_log, use_container_width=True, height=520)
+    st.dataframe(full_log, width='stretch', height=520)
 
 st.download_button('Scarica caso JSON', export_case_json(inp), 'ebplatelite_case.json', 'application/json')
