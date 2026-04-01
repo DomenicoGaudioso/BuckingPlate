@@ -270,18 +270,52 @@ with T2:
             st.dataframe(pd.DataFrame(r['connectivity_checks']), use_container_width=True)
 
 with T3:
-    st.dataframe(manual_res['summary_df'], use_container_width=True, height=360)
-    st.markdown('**Tabella k_sigma**')
-    st.dataframe(manual_res['ksigma_table_df'], use_container_width=True, height=180)
-    st.markdown('**Tabella rho**')
-    st.dataframe(manual_res['rho_table_df'], use_container_width=True, height=140)
-    st.markdown('**Tabella larghezze efficaci**')
-    st.dataframe(manual_res['beff_table_df'], use_container_width=True, height=180)
-    st.markdown('**Dettaglio subpannelli**')
-    st.dataframe(manual_res['details_df'], use_container_width=True, height=320)
-    st.dataframe(manual_res['calc_log'], use_container_width=True, height=220)
-    st.warning('Le formule EC3 implementate sono quelle leggibili nel workflow documentale allegato. I casi normativi completi external/psi generico richiedono ancora il testo completo EN 1993-1-5 o commentary ECCS.')
+    st.dataframe(
+        manual_res.get('summary_df', pd.DataFrame()),
+        use_container_width=True,
+        height=360
+    )
 
+    st.markdown('**Tabella k_sigma**')
+    st.dataframe(
+        manual_res.get('ksigma_table_df', pd.DataFrame()),
+        use_container_width=True,
+        height=180
+    )
+
+    st.markdown('**Tabella rho**')
+    st.dataframe(
+        manual_res.get('rho_table_df', pd.DataFrame()),
+        use_container_width=True,
+        height=140
+    )
+
+    st.markdown('**Tabella larghezze efficaci**')
+    st.dataframe(
+        manual_res.get('beff_table_df', pd.DataFrame()),
+        use_container_width=True,
+        height=180
+    )
+
+    st.markdown('**Dettaglio subpannelli**')
+    st.dataframe(
+        manual_res.get('details_df', pd.DataFrame()),
+        use_container_width=True,
+        height=320
+    )
+
+    st.dataframe(
+        manual_res.get('calc_log', pd.DataFrame()),
+        use_container_width=True,
+        height=220
+    )
+
+    st.warning(
+        'Le formule EC3 implementate sono quelle leggibili nel workflow documentale allegato. '
+        'I casi normativi completi external/psi generico richiedono ancora il testo completo '
+        'EN 1993-1-5 o commentary ECCS.'
+    )
+    
 with T4:
     st.dataframe(make_compare_df(st.session_state.sem_res, st.session_state.fem_res, manual_res), use_container_width=True)
     if not manual_res['compare_df'].empty:
