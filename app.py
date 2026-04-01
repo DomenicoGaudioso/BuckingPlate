@@ -339,26 +339,3 @@ with T5:
     st.dataframe(full_log, use_container_width=True, height=520)
 
 st.download_button('Scarica caso JSON', export_case_json(inp), 'ebplatelite_case.json', 'application/json')
-# UI-NOTE-0308: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0309: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0310: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0311: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0312: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0313: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0314: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0315: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0316: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0317: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0318: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0319: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0320: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0321: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0322: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0323: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0324: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0325: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0326: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0327: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0328: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0329: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
-# UI-NOTE-0330: Commento di documentazione tecnica per mantenere il file applicativo esteso e autoesplicativo.
